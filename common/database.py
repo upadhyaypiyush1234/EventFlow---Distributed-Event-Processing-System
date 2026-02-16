@@ -9,7 +9,7 @@ from sqlalchemy.orm import declarative_base
 from common.config import settings
 
 # Convert postgresql:// to postgresql+asyncpg://
-DATABASE_URL = settings.database_url.replace('postgresql://', 'postgresql+asyncpg://')
+DATABASE_URL = settings.database_url.replace("postgresql://", "postgresql+asyncpg://")
 
 # Create async engine
 engine = create_async_engine(
@@ -32,9 +32,12 @@ Base = declarative_base()
 
 class RawEvent(Base):
     """Raw events table"""
+
     __tablename__ = "raw_events"
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+
+    id = Column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
     event_id = Column(UUID(as_uuid=True), unique=True, nullable=False, index=True)
     payload = Column(JSONB, nullable=False)
     received_at = Column(DateTime, nullable=False, server_default=text("NOW()"))
@@ -42,9 +45,12 @@ class RawEvent(Base):
 
 class ProcessedEventDB(Base):
     """Processed events table"""
+
     __tablename__ = "processed_events"
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+
+    id = Column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
     event_id = Column(UUID(as_uuid=True), unique=True, nullable=False, index=True)
     event_type = Column(String(50), nullable=False, index=True)
     user_id = Column(String(255), index=True)
@@ -58,9 +64,12 @@ class ProcessedEventDB(Base):
 
 class FailedEvent(Base):
     """Failed events (Dead Letter Queue)"""
+
     __tablename__ = "failed_events"
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+
+    id = Column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
     event_id = Column(UUID(as_uuid=True), nullable=False, index=True)
     payload = Column(JSONB, nullable=False)
     error_message = Column(Text)

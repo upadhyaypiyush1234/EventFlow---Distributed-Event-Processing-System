@@ -12,14 +12,10 @@ def run_command(cmd, description):
     print(f"\n{'='*60}")
     print(f"  {description}")
     print(f"{'='*60}")
-    
+
     try:
         result = subprocess.run(
-            cmd,
-            shell=True,
-            check=True,
-            capture_output=True,
-            text=True
+            cmd, shell=True, check=True, capture_output=True, text=True
         )
         print(result.stdout)
         return True
@@ -31,13 +27,13 @@ def run_command(cmd, description):
 def check_prerequisites():
     """Check if required tools are installed"""
     print("\n🔍 Checking prerequisites...")
-    
+
     tools = {
         "docker": "docker --version",
         "docker-compose": "docker-compose --version",
-        "python": "python --version"
+        "python": "python --version",
     }
-    
+
     missing = []
     for tool, cmd in tools.items():
         try:
@@ -46,7 +42,7 @@ def check_prerequisites():
         except subprocess.CalledProcessError:
             print(f"  ❌ {tool} not found")
             missing.append(tool)
-    
+
     if missing:
         print(f"\n❌ Missing tools: {', '.join(missing)}")
         print("\nPlease install:")
@@ -57,23 +53,24 @@ def check_prerequisites():
         if "python" in missing:
             print("  - Python 3.11+: https://www.python.org/downloads/")
         return False
-    
+
     return True
 
 
 def setup_environment():
     """Setup environment file"""
     print("\n📝 Setting up environment...")
-    
+
     env_file = Path(".env")
     env_example = Path(".env.example")
-    
+
     if env_file.exists():
         print("  ℹ️  .env file already exists")
         return True
-    
+
     if env_example.exists():
         import shutil
+
         shutil.copy(env_example, env_file)
         print("  ✅ Created .env from .env.example")
         return True
@@ -85,36 +82,31 @@ def setup_environment():
 def install_dependencies():
     """Install Python dependencies"""
     print("\n📦 Installing Python dependencies...")
-    
-    return run_command(
-        "pip install -r requirements.txt",
-        "Installing packages"
-    )
+
+    return run_command("pip install -r requirements.txt", "Installing packages")
 
 
 def start_services():
     """Start Docker services"""
     print("\n🚀 Starting services...")
-    
-    if not run_command(
-        "docker-compose up -d",
-        "Starting Docker containers"
-    ):
+
+    if not run_command("docker-compose up -d", "Starting Docker containers"):
         return False
-    
+
     print("\n⏳ Waiting for services to be ready...")
     import time
+
     time.sleep(10)
-    
+
     return True
 
 
 def verify_services():
     """Verify services are running"""
     print("\n✅ Verifying services...")
-    
+
     import httpx
-    
+
     try:
         response = httpx.get("http://localhost:8000/health", timeout=10)
         if response.status_code == 200:
@@ -130,9 +122,9 @@ def verify_services():
 
 def print_success():
     """Print success message"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("  🎉 EventFlow is ready!")
-    print("="*60)
+    print("=" * 60)
     print("\n📊 Access points:")
     print("  - API:        http://localhost:8000")
     print("  - API Docs:   http://localhost:8000/docs")
@@ -166,33 +158,33 @@ def main():
     ║                                                           ║
     ╚═══════════════════════════════════════════════════════════╝
     """)
-    
+
     # Check prerequisites
     if not check_prerequisites():
         sys.exit(1)
-    
+
     # Setup environment
     if not setup_environment():
         print("\n❌ Failed to setup environment")
         sys.exit(1)
-    
+
     # Install dependencies
     if not install_dependencies():
         print("\n❌ Failed to install dependencies")
         sys.exit(1)
-    
+
     # Start services
     if not start_services():
         print("\n❌ Failed to start services")
         print("\nTry running: docker-compose logs")
         sys.exit(1)
-    
+
     # Verify services
     if not verify_services():
         print("\n⚠️  Services started but health check failed")
         print("\nCheck logs: docker-compose logs -f")
         sys.exit(1)
-    
+
     # Success!
     print_success()
 
