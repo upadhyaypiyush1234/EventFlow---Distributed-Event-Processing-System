@@ -369,11 +369,44 @@ EventFlow demonstrates **advanced distributed systems concepts**:
 
 ## 🚀 Quick Start
 
-### Prerequisites
+### Option 1: Deploy to Cloud (FREE - No Credit Card Required!)
+
+Choose your platform:
+
+#### A. Railway.app (Recommended - Full System)
+- ✅ No credit card required
+- ✅ $5 free credit/month
+- ✅ API + Workers + Database + Redis
+- ✅ One-click deployment
+
+**Deploy:** https://railway.app → "Deploy from GitHub repo"
+
+📖 Guide: [RAILWAY_DEPLOYMENT.md](RAILWAY_DEPLOYMENT.md)
+
+#### B. Render.com (API Only)
+- ✅ No credit card required
+- ✅ Free forever (with limitations)
+- ✅ API + Database + Redis
+- ❌ No workers (paid feature)
+
+**Deploy:** https://render.com → "New Web Service"
+
+📖 Guide: [RENDER_DEPLOYMENT.md](RENDER_DEPLOYMENT.md)
+
+#### C. Fly.io (Full System - Requires Card)
+- ⚠️ Credit card required (won't charge)
+- ✅ Full system support
+- ✅ Best performance
+
+📖 Guide: [FLY_DEPLOYMENT.md](FLY_DEPLOYMENT.md)
+
+### Option 2: Run Locally with Docker
+
+**Prerequisites:**
 - Docker Desktop (required)
 - Python 3.11+ (optional - for test scripts only)
 
-### Windows Setup
+**Windows Setup:**
 
 1. **Install Docker Desktop:**
    - Download: https://www.docker.com/products/docker-desktop/
@@ -390,7 +423,7 @@ EventFlow demonstrates **advanced distributed systems concepts**:
    docker-compose up -d
    ```
 
-### Linux/Mac Setup
+**Linux/Mac Setup:**
 
 ```bash
 # Start services
@@ -431,6 +464,8 @@ python scripts/load_test.py --events 1000 --rate 100
 
 Comprehensive guides for different aspects:
 
+- **[DEPLOY_QUICK_START.md](DEPLOY_QUICK_START.md)** - 🆕 Deploy to Fly.io free tier in 5 minutes (no credit card!)
+- **[FLY_DEPLOYMENT.md](FLY_DEPLOYMENT.md)** - Complete Fly.io deployment guide with troubleshooting
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Deep dive into system design, components, data flow, and architectural decisions
 - **[QUICKSTART.md](QUICKSTART.md)** - Step-by-step setup guide for Windows, Linux, and Mac with troubleshooting
 - **[TESTING.md](TESTING.md)** - Testing strategies including unit, integration, load, and manual testing
