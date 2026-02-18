@@ -15,10 +15,34 @@ class RedisClient:
         self.consumer_group = settings.redis_consumer_group
 
     async def connect(self):
-        """Connect to Redis"""
-        self.redis = await redis.from_url(
-            settings.redis_url, encoding="utf-8", decode_responses=True
+        """Connect to Redis with retry logic"""
+        import asyncio
+        from tenacity import retry, stop_after_attempt, wait_exponential
+        
+        # Parse Redis URL to add SSL if needed
+        redis_url = settings.redis_url
+        
+        # If using Render or other cloud Redis, ensure SSL is enabled
+        if "rediss://" not in redis_url and any(host in redis_url for host in ["redis.render.com", "redis-cloud", "upstash"]):
+            redis_url = redis_url.replace("redis://", "rediss://")
+        
+        @retry(
+            stop=stop_after_attempt(5),
+            wait=wait_exponential(multiplier=1, min=2, max=10)
         )
+        async def _connect_with_retry():
+            self.redis = await redis.from_url(
+                redis_url,
+                encoding="utf-8",
+                decode_responses=True,
+                socket_connect_timeout=10,
+                socket_keepalive=True,
+                health_check_interval=30
+            )
+            # Test connection
+            await self.redis.ping()
+        
+        await _connect_with_retry()
 
         # Create consumer group if it doesn't exist
         try:

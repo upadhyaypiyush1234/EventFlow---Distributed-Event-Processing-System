@@ -1,371 +1,470 @@
-# Render.com Deployment Guide (No Credit Card, API Only)
+# Deploying EventFlow to Render
 
-Deploy EventFlow API to Render.com - completely free, no credit card required!
+This guide walks you through deploying EventFlow to Render.com.
 
-## What You Get (Free)
+## Prerequisites
 
-- ✅ API service (750 hours/month)
-- ✅ PostgreSQL database (90 days free)
-- ✅ Redis (90 days free, 25MB)
-- ✅ Free SSL certificate
-- ✅ Auto-deploy on git push
-- ❌ Background workers (requires paid plan)
+- GitHub account with your EventFlow repository
+- Render account (free tier works)
 
-**Note:** Workers won't run on free tier, but you can demo the API accepting and queuing events.
+## Architecture on Render
 
-## Quick Deploy (5 Minutes)
+```
+┌─────────────────────────────────────────┐
+│           Render Services               │
+├─────────────────────────────────────────┤
+│  Web Service (API)                      │
+│  - FastAPI application                  │
+│  - Auto-scaling                         │
+│  - HTTPS enabled                        │
+├─────────────────────────────────────────┤
+│  Background Worker (optional)           │
+│  - Event processing                     │
+│  - Scalable instances                   │
+├─────────────────────────────────────────┤
+│  PostgreSQL Database                    │
+│  - Managed PostgreSQL                   │
+│  - Automatic backups                    │
+├─────────────────────────────────────────┤
+│  Redis Instance                         │
+│  - Managed Redis                        │
+│  - SSL/TLS enabled                      │
+└─────────────────────────────────────────┘
+```
 
-### Step 1: Sign Up
+## Step 1: Create PostgreSQL Database
 
-1. Go to https://render.com
-2. Click "Get Started"
-3. Sign up with GitHub (no credit card needed!)
-4. Authorize Render to access your repos
-
-### Step 2: Deploy API Service
-
-1. Click "New +" → "Web Service"
-2. Connect your EventFlow repository
+1. Go to Render Dashboard
+2. Click "New +" → "PostgreSQL"
 3. Configure:
-   - **Name:** `eventflow-api`
-   - **Region:** Oregon (US West) - free
-   - **Branch:** `main`
-   - **Root Directory:** (leave empty)
-   - **Runtime:** Python 3
-   - **Build Command:** `pip install -r requirements.txt`
-   - **Start Command:** `uvicorn api.main:app --host 0.0.0.0 --port $PORT`
-   - **Instance Type:** Free
-4. Click "Create Web Service"
+   - **Name**: `eventflow-db`
+   - **Database**: `eventflow`
+   - **User**: `eventflow`
+   - **Region**: Choose closest to you
+   - **Plan**: Free (or paid for production)
+4. Click "Create Database"
+5. **Save the Internal Database URL** (starts with `postgresql://`)
 
-### Step 3: Add PostgreSQL
-
-1. Click "New +" → "PostgreSQL"
-2. Configure:
-   - **Name:** `eventflow-db`
-   - **Database:** `eventflow`
-   - **User:** `eventflow`
-   - **Region:** Same as API
-   - **Instance Type:** Free
-3. Click "Create Database"
-4. Wait for it to provision (~2 minutes)
-
-### Step 4: Add Redis
+## Step 2: Create Redis Instance
 
 1. Click "New +" → "Redis"
 2. Configure:
-   - **Name:** `eventflow-redis`
-   - **Region:** Same as API
-   - **Instance Type:** Free (25MB)
+   - **Name**: `eventflow-redis`
+   - **Region**: Same as database
+   - **Plan**: Free (or paid for production)
+   - **Maxmemory Policy**: `allkeys-lru`
 3. Click "Create Redis"
+4. **Save the Internal Redis URL** (starts with `redis://` or `rediss://`)
 
-### Step 5: Connect Services
+## Step 3: Deploy API Service
 
-1. Go to your API service
-2. Click "Environment" tab
-3. Add environment variables:
+1. Click "New +" → "Web Service"
+2. Connect your GitHub repository
+3. Configure:
+   - **Name**: `eventflow-api`
+   - **Region**: Same as database/Redis
+   - **Branch**: `main`
+   - **Root Directory**: Leave empty
+   - **Runtime**: `Python 3`
+   - **Build Command**: 
+     ```bash
+     pip install -r requirements.txt
+     ```
+   - **Start Command**:
+     ```bash
+     uvicorn api.main:app --host 0.0.0.0 --port $PORT
+     ```
+   - **Plan**: Free (or paid for production)
 
-```
-DATABASE_URL = <copy from PostgreSQL service "Internal Database URL">
-REDIS_URL = <copy from Redis service "Internal Redis URL">
-LOG_LEVEL = INFO
-```
+4. **Environment Variables** (click "Advanced" → "Add Environment Variable"):
+   ```
+   DATABASE_URL=<your-postgres-internal-url>
+   REDIS_URL=<your-redis-internal-url>
+   LOG_LEVEL=INFO
+   PYTHON_VERSION=3.11.9
+   ```
 
-4. Click "Save Changes"
-5. Service will auto-redeploy
+5. Click "Create Web Service"
 
-### Step 6: Initialize Database
+## Step 4: Deploy Worker Service (Optional)
 
-1. Go to PostgreSQL service
-2. Click "Connect" → Copy the external connection string
-3. Connect locally:
+1. Click "New +" → "Background Worker"
+2. Connect same GitHub repository
+3. Configure:
+   - **Name**: `eventflow-worker`
+   - **Region**: Same as others
+   - **Branch**: `main`
+   - **Root Directory**: Leave empty
+   - **Runtime**: `Python 3`
+   - **Build Command**: 
+     ```bash
+     pip install -r requirements.txt
+     ```
+   - **Start Command**:
+     ```bash
+     python -m worker.main
+     ```
+   - **Plan**: Free (or paid for production)
 
-```bash
-# Install psql if needed
-brew install postgresql
+4. **Environment Variables**:
+   ```
+   DATABASE_URL=<your-postgres-internal-url>
+   REDIS_URL=<your-redis-internal-url>
+   LOG_LEVEL=INFO
+   WORKER_ID=worker-render-1
+   PYTHON_VERSION=3.11.9
+   ```
 
-# Connect to Render database
-psql <connection-string-from-render>
+5. Click "Create Background Worker"
 
-# Run initialization script
-\i scripts/init_db.sql
+## Environment Variables Explained
 
-# Or paste the SQL content directly
-# Exit
-\q
-```
+### Required Variables
 
-### Step 7: Test Your API
+- **DATABASE_URL**: PostgreSQL connection string
+  - Format: `postgresql://user:password@host:port/database`
+  - Get from Render PostgreSQL dashboard (Internal Database URL)
+  
+- **REDIS_URL**: Redis connection string
+  - Format: `redis://default:password@host:port` or `rediss://...` (with SSL)
+  - Get from Render Redis dashboard (Internal Redis URL)
 
-1. Go to your API service
-2. Copy the URL (looks like: `https://eventflow-api.onrender.com`)
-3. Test it:
+### Optional Variables
 
-```bash
-# Health check
-curl https://eventflow-api.onrender.com/health
+- **LOG_LEVEL**: Logging level (DEBUG, INFO, WARNING, ERROR)
+  - Default: `INFO`
+  - Use `DEBUG` for troubleshooting
 
-# API documentation
-open https://eventflow-api.onrender.com/docs
+- **WORKER_ID**: Unique identifier for worker
+  - Default: `worker-1`
+  - Use different IDs for multiple workers
 
-# Send test event
-curl -X POST https://eventflow-api.onrender.com/events \
-  -H "Content-Type: application/json" \
-  -d '{
-    "event_type": "purchase",
-    "user_id": "user123",
-    "properties": {
-      "amount": 99.99,
-      "product": "Widget"
-    }
-  }'
-```
-
-## What Works on Free Tier
-
-✅ **API Endpoints:**
-- POST /events - Accept events
-- GET /health - Health check
-- GET /docs - API documentation
-- GET /metrics/summary - Queue stats
-
-✅ **Event Storage:**
-- Events stored in PostgreSQL
-- Events queued in Redis
-- Raw events table populated
-
-❌ **What Doesn't Work:**
-- Background workers (need paid plan)
-- Events won't be processed automatically
-- Events stay in queue
-
-## Workaround: Manual Processing
-
-You can manually process queued events:
-
-```bash
-# Connect to your API service shell
-# (In Render dashboard: Service → Shell)
-
-# Run worker manually
-python -m worker.main
-```
-
-Or create a cron job to process periodically (requires paid plan).
-
-## Configuration
-
-### Environment Variables
-
-Set in Render dashboard (Service → Environment):
-
-```
-DATABASE_URL = <from PostgreSQL service>
-REDIS_URL = <from Redis service>
-LOG_LEVEL = INFO
-API_HOST = 0.0.0.0
-API_PORT = $PORT
-```
-
-### Auto-Deploy
-
-Render automatically deploys when you push to GitHub:
-
-```bash
-git add .
-git commit -m "Update feature"
-git push
-# Render auto-deploys!
-```
-
-## Monitoring
-
-### View Logs
-
-1. Go to your service
-2. Click "Logs" tab
-3. View real-time logs
-
-### Check Metrics
-
-1. Go to your service
-2. Click "Metrics" tab
-3. View CPU, Memory, Bandwidth
-
-### Health Checks
-
-Render automatically monitors `/health` endpoint:
-- Green: Service healthy
-- Red: Service down (auto-restarts)
-
-## Limitations on Free Tier
-
-1. **Service sleeps after 15 minutes** of inactivity
-   - First request after sleep takes ~30 seconds
-   - Subsequent requests are fast
-
-2. **750 hours/month** limit
-   - ~31 days if always on
-   - Enough for demos
-
-3. **No background workers**
-   - Can't run worker service
-   - Events queue but don't process
-
-4. **Database expires after 90 days**
-   - Need to upgrade or migrate
-
-5. **Redis expires after 90 days**
-   - Need to upgrade or migrate
-
-## Cost Breakdown
-
-Free tier:
-- API Service: **FREE** (750 hours)
-- PostgreSQL: **FREE** (90 days)
-- Redis: **FREE** (90 days)
-- SSL Certificate: **FREE**
-
-**Total: $0 for 90 days** 🎉
-
-After 90 days:
-- PostgreSQL: $7/month
-- Redis: $10/month
-- API: Still free
-- **Total: $17/month**
-
-## Upgrading to Run Workers
-
-To run the full system with workers:
-
-1. Upgrade to paid plan ($7/month)
-2. Create worker service:
-   - New → Background Worker
-   - Start Command: `python -m worker.main`
-   - Connect same DATABASE_URL and REDIS_URL
-
-## Optimizing for Free Tier
-
-### Keep Service Awake
-
-Use a free uptime monitor:
-- UptimeRobot: https://uptimerobot.com
-- Ping your API every 5 minutes
-- Prevents sleep
-
-### Reduce Database Size
-
-```python
-# Add to worker/processor.py
-# Delete old events periodically
-async def cleanup_old_events():
-    # Delete events older than 30 days
-    await session.execute(
-        delete(ProcessedEventDB)
-        .where(ProcessedEventDB.processed_at < datetime.now() - timedelta(days=30))
-    )
-```
+- **PYTHON_VERSION**: Python version to use
+  - Default: `3.11.9`
+  - Render uses this to install correct Python
 
 ## Troubleshooting
 
-### "Service Unavailable"
+### Issue: Redis Connection Error
 
-Service is sleeping. Wait 30 seconds and retry.
+**Error**: `Connection closed by server` or `Authentication failed`
 
-### "Database Connection Failed"
+**Solutions**:
 
-1. Check DATABASE_URL format
-2. Verify database is running
-3. Check database logs
+1. **Check Redis URL format**:
+   - Should start with `redis://` or `rediss://` (SSL)
+   - Render Redis requires SSL, use `rediss://`
 
-### "Build Failed"
+2. **Update Redis URL**:
+   ```bash
+   # If URL is redis://, change to rediss://
+   REDIS_URL=rediss://default:password@host:port
+   ```
 
-1. Check build logs
-2. Verify requirements.txt exists
-3. Check Python version compatibility
+3. **Check Redis is running**:
+   - Go to Render Redis dashboard
+   - Ensure status is "Available"
 
-### "Health Check Failed"
+4. **Verify environment variable**:
+   - Go to Web Service → Environment
+   - Check REDIS_URL is set correctly
+   - Click "Save Changes" if modified
 
-1. Verify /health endpoint works locally
-2. Check service logs
-3. Verify environment variables set
+### Issue: Database Connection Error
 
-## Custom Domain
+**Error**: `could not connect to server` or `password authentication failed`
 
-1. Go to service → Settings
-2. Scroll to "Custom Domain"
-3. Add your domain
-4. Update DNS records as shown
-5. Free SSL certificate auto-generated
+**Solutions**:
 
-## Useful Features
+1. **Use Internal Database URL**:
+   - Go to PostgreSQL dashboard
+   - Copy "Internal Database URL" (not External)
+   - Internal URLs work within Render network
 
-### Shell Access
+2. **Check database is running**:
+   - PostgreSQL status should be "Available"
+   - Wait a few minutes after creation
 
-1. Go to service
-2. Click "Shell" tab
-3. Run commands in your service
+3. **Verify connection string**:
+   ```
+   postgresql://user:password@host:port/database
+   ```
+
+### Issue: Application Won't Start
+
+**Error**: `Application startup failed`
+
+**Solutions**:
+
+1. **Check logs**:
+   - Go to Web Service → Logs
+   - Look for specific error messages
+
+2. **Verify build succeeded**:
+   - Check "Events" tab
+   - Ensure "Build succeeded" message
+
+3. **Check Python version**:
+   - Add `PYTHON_VERSION=3.11.9` to environment variables
+
+4. **Verify start command**:
+   ```bash
+   uvicorn api.main:app --host 0.0.0.0 --port $PORT
+   ```
+
+### Issue: Port Binding Error
+
+**Error**: `Address already in use`
+
+**Solution**:
+- Render automatically sets `$PORT` environment variable
+- Always use `--port $PORT` in start command
+- Don't hardcode port 8000
+
+### Issue: Module Not Found
+
+**Error**: `ModuleNotFoundError: No module named 'X'`
+
+**Solutions**:
+
+1. **Check requirements.txt**:
+   - Ensure all dependencies are listed
+   - Include version numbers
+
+2. **Rebuild service**:
+   - Go to Web Service → Manual Deploy
+   - Click "Clear build cache & deploy"
+
+## Testing Your Deployment
+
+### 1. Check API Health
 
 ```bash
-# Check database connection
-python -c "from common.database import check_db_health; import asyncio; print(asyncio.run(check_db_health()))"
-
-# Check Redis connection
-python -c "from common.redis_client import redis_client; import asyncio; asyncio.run(redis_client.connect()); print(asyncio.run(redis_client.check_health()))"
+curl https://your-app.onrender.com/health
 ```
 
-### Manual Deploys
+Expected response:
+```json
+{
+  "status": "healthy",
+  "timestamp": "2026-02-18T...",
+  "services": {
+    "database": "healthy",
+    "redis": "healthy"
+  },
+  "version": "1.0.0"
+}
+```
 
-1. Go to service
-2. Click "Manual Deploy"
-3. Select branch
-4. Click "Deploy"
+### 2. Send Test Event
 
-### Rollback
+```bash
+curl -X POST https://your-app.onrender.com/events \
+  -H "Content-Type: application/json" \
+  -d '{
+    "event_type": "purchase",
+    "user_id": "test_user",
+    "properties": {"amount": 99.99, "product": "Test"}
+  }'
+```
 
-1. Go to service → "Events"
-2. Find previous successful deploy
-3. Click "Rollback"
+Expected response:
+```json
+{
+  "event_id": "...",
+  "status": "accepted",
+  "message": "Event accepted for processing",
+  "received_at": "..."
+}
+```
 
-## Comparison: Render vs Railway vs Fly.io
+### 3. Check API Documentation
 
-| Feature | Render | Railway | Fly.io |
-|---------|--------|---------|--------|
-| Credit Card | ❌ Not required | ❌ Not required | ✅ Required |
-| Workers | ❌ Paid only | ✅ Free ($5 credit) | ✅ Free |
-| Database | ⚠️ 90 days free | ✅ Included | ✅ Included |
-| Redis | ⚠️ 90 days free | ✅ Included | ❌ External |
-| Service Sleep | ✅ Yes (15 min) | ❌ No | ⚠️ Optional |
-| Best For | API demos | Full system | Production |
+Visit: `https://your-app.onrender.com/docs`
 
-## Alternative: Deploy Full System
+### 4. View Logs
 
-If you need workers, consider:
+```bash
+# In Render dashboard
+# Go to Web Service → Logs
+# Or Background Worker → Logs
+```
 
-1. **Railway.app** - $5 free credit, no card required
-2. **Fly.io** - Requires card but won't charge
-3. **Heroku** - Requires card, limited free tier
+## Scaling on Render
 
-## Getting Help
+### Horizontal Scaling (Multiple Instances)
 
-- Render Docs: https://render.com/docs
-- Render Community: https://community.render.com
-- Render Status: https://status.render.com
+1. Go to Web Service → Settings
+2. Scroll to "Scaling"
+3. Increase "Instance Count"
+4. Click "Save Changes"
 
-## Summary
+**Note**: Free tier limited to 1 instance
 
-Render.com is perfect for:
-- ✅ Demonstrating the API
-- ✅ Showing event ingestion
-- ✅ Portfolio projects
-- ✅ Learning and testing
+### Vertical Scaling (More Resources)
 
-Not ideal for:
-- ❌ Full event processing (no workers)
-- ❌ Long-term production (90-day limit)
-- ❌ Always-on services (sleeps after 15 min)
+1. Go to Web Service → Settings
+2. Change "Instance Type" to higher tier
+3. Click "Save Changes"
 
-**For full system, use Railway.app instead!**
+## Monitoring
+
+### Built-in Monitoring
+
+Render provides:
+- CPU usage
+- Memory usage
+- Request count
+- Response times
+
+Access: Web Service → Metrics
+
+### Application Metrics
+
+EventFlow exposes Prometheus metrics:
+- `https://your-app.onrender.com/metrics/summary`
+
+### Logs
+
+Structured JSON logs available in:
+- Web Service → Logs
+- Background Worker → Logs
+
+Search by:
+- `correlation_id` - trace specific event
+- `level: ERROR` - find errors
+- `event_type` - filter by event type
+
+## Cost Optimization
+
+### Free Tier Limits
+
+- **Web Service**: 750 hours/month (sleeps after 15 min inactivity)
+- **PostgreSQL**: 1GB storage, 97 hours/month
+- **Redis**: 25MB storage
+- **Background Worker**: 750 hours/month
+
+### Tips
+
+1. **Use free tier for demos**:
+   - Sufficient for portfolio projects
+   - Services sleep when inactive (wake on request)
+
+2. **Upgrade for production**:
+   - Paid plans don't sleep
+   - More resources and storage
+   - Better performance
+
+3. **Monitor usage**:
+   - Check Render dashboard for usage
+   - Set up billing alerts
+
+## Production Checklist
+
+Before going to production:
+
+- [ ] Use paid plans (no sleep)
+- [ ] Enable automatic backups (PostgreSQL)
+- [ ] Set up custom domain
+- [ ] Enable HTTPS (automatic on Render)
+- [ ] Add authentication to API
+- [ ] Implement rate limiting
+- [ ] Set up monitoring/alerting
+- [ ] Configure log retention
+- [ ] Test failure scenarios
+- [ ] Document runbooks
+
+## Render-Specific Configuration
+
+### render.yaml (Infrastructure as Code)
+
+Create `render.yaml` in your repo:
+
+```yaml
+services:
+  - type: web
+    name: eventflow-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: eventflow-db
+          property: connectionString
+      - key: REDIS_URL
+        fromDatabase:
+          name: eventflow-redis
+          property: connectionString
+      - key: LOG_LEVEL
+        value: INFO
+      - key: PYTHON_VERSION
+        value: 3.11.9
+
+  - type: worker
+    name: eventflow-worker
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m worker.main
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: eventflow-db
+          property: connectionString
+      - key: REDIS_URL
+        fromDatabase:
+          name: eventflow-redis
+          property: connectionString
+      - key: LOG_LEVEL
+        value: INFO
+      - key: WORKER_ID
+        value: worker-render-1
+
+databases:
+  - name: eventflow-db
+    databaseName: eventflow
+    user: eventflow
+
+  - name: eventflow-redis
+    plan: starter
+```
+
+## Support
+
+### Render Documentation
+- https://render.com/docs
+
+### EventFlow Issues
+- Check logs in Render dashboard
+- Review error messages
+- Test locally with same environment variables
+
+### Common Issues
+- Redis SSL: Use `rediss://` not `redis://`
+- Database: Use Internal URL not External
+- Port: Always use `$PORT` variable
+- Python: Specify version in environment
+
+## Next Steps
+
+1. **Add Custom Domain**:
+   - Go to Settings → Custom Domain
+   - Follow DNS configuration steps
+
+2. **Set Up Monitoring**:
+   - Integrate with external monitoring (Datadog, New Relic)
+   - Set up alerts for errors
+
+3. **Implement CI/CD**:
+   - Render auto-deploys on git push
+   - Add GitHub Actions for tests before deploy
+
+4. **Scale Workers**:
+   - Add more background workers for higher throughput
+   - Each worker processes events in parallel
 
 ---
 
-**Deploy now:** https://render.com 🚀
+**Your EventFlow is now running on Render! 🚀**
+
+Access your API at: `https://your-app-name.onrender.com`

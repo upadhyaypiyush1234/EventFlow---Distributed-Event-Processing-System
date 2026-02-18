@@ -24,12 +24,20 @@ async def lifespan(app: FastAPI):
     logger.info("Starting API service")
 
     # Initialize database
-    await init_db()
-    logger.info("Database initialized")
+    try:
+        await init_db()
+        logger.info("Database initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+        raise
 
-    # Connect to Redis
-    await redis_client.connect()
-    logger.info("Connected to Redis")
+    # Connect to Redis with retry
+    try:
+        await redis_client.connect()
+        logger.info("Connected to Redis")
+    except Exception as e:
+        logger.error(f"Failed to connect to Redis: {e}", exc_info=True)
+        raise
 
     # Start metrics server
     start_metrics_server(settings.metrics_port)
@@ -38,6 +46,8 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
+    logger.info("Shutting down API service")
+    await redis_client.disconnect()
     logger.info("Shutting down API service")
     await redis_client.disconnect()
 
